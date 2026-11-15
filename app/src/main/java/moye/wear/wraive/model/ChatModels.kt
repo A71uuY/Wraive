@@ -98,7 +98,20 @@ data class ChatMessage(
     @SerializedName(value = "createdAt", alternate = ["m"])
     val createdAt: Long = System.currentTimeMillis(),
     @SerializedName(value = "updatedAt", alternate = ["n"])
-    val updatedAt: Long = createdAt
+    val updatedAt: Long = createdAt,
+    @SerializedName("providerContent")
+    val providerContent: ProviderMessageContent? = null
+)
+
+data class MessageCitation(
+    @SerializedName("url") val url: String,
+    @SerializedName("title") val title: String
+)
+
+data class ProviderMessageContent(
+    @SerializedName("protocol") val protocol: String,
+    @SerializedName("json") val json: String,
+    @SerializedName("citations") val citations: List<MessageCitation> = emptyList()
 )
 
 data class Conversation(
@@ -128,6 +141,7 @@ sealed interface StreamEvent {
     data class TextDelta(val text: String) : StreamEvent
     data class ReasoningDelta(val text: String) : StreamEvent
     data class ToolDelta(val call: ToolCall) : StreamEvent
+    data class ProviderContent(val content: ProviderMessageContent) : StreamEvent
     data class Usage(val usage: TokenUsage) : StreamEvent
     data object Completed : StreamEvent
 }

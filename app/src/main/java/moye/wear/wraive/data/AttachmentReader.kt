@@ -9,11 +9,13 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import android.text.Html
 import android.util.Base64
+import android.webkit.MimeTypeMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import moye.wear.wraive.model.Attachment
 import moye.wear.wraive.model.AttachmentKind
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.util.zip.ZipInputStream
 import kotlin.math.roundToInt
 
@@ -164,6 +166,12 @@ class AttachmentReader(private val context: Context) {
     }
 
     private fun ContentResolver.metadata(uri: Uri): FileMetadata {
+        if (uri.scheme == ContentResolver.SCHEME_FILE) {
+            val file = File(requireNotNull(uri.path))
+            val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase())
+                ?: "application/octet-stream"
+            return FileMetadata(file.name, mime, file.length())
+        }
         var name = uri.lastPathSegment ?: "附件"
         var size = 0L
         query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)

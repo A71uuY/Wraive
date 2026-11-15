@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PushPin
@@ -39,6 +40,8 @@ import kotlinx.coroutines.launch
 import java.io.OutputStream
 import moye.wear.wraive.model.Conversation
 import moye.wear.wraive.ui.components.ConfirmActionDialog
+import moye.wear.wraive.ui.components.FullScreenEditor
+import moye.wear.wraive.ui.components.WearTextField
 import moye.wear.wraive.ui.components.WearActionButton
 import moye.wear.wraive.ui.components.WearListScreen
 import moye.wear.wraive.ui.components.WearInfoCard
@@ -200,12 +203,15 @@ fun ConversationActionsScreen(
     onArchive: () -> Unit,
     exportMarkdown: suspend (OutputStream) -> Unit,
     exportHtml: suspend (OutputStream) -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onRename: (String) -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var exportStatus by remember { mutableStateOf<String?>(null) }
     var confirmingDelete by remember(conversation.id) { mutableStateOf(false) }
+    var editingTitle by remember(conversation.id) { mutableStateOf(false) }
+    var title by remember(conversation.id, conversation.title) { mutableStateOf(conversation.title) }
     val markdownLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("text/markdown")
     ) { uri ->
@@ -229,6 +235,12 @@ fun ConversationActionsScreen(
         }
     }
     WearListScreen(conversation.title) {
+        item {
+            WearActionButton("编辑标题", {
+                title = conversation.title
+                editingTitle = true
+            }, icon = Icons.Default.Edit)
+        }
         item {
             WearActionButton(
                 label = if (conversation.pinned) "取消置顶" else "置顶",
@@ -268,6 +280,18 @@ fun ConversationActionsScreen(
                 onClick = { confirmingDelete = true }
             )
         }
+    }
+    FullScreenEditor(
+        visible = editingTitle,
+        title = "编辑标题",
+        onDismiss = { editingTitle = false },
+        onSave = {
+            onRename(title.trim())
+            editingTitle = false
+        },
+        saveEnabled = title.isNotBlank()
+    ) {
+        item { WearTextField(title, { title = it }, "对话标题") }
     }
     ConfirmActionDialog(
         visible = confirmingDelete,

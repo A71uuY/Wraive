@@ -1,5 +1,6 @@
 package moye.wear.wraive.model
 
+import com.google.gson.annotations.SerializedName
 import java.util.UUID
 
 enum class SearchProviderType {
@@ -22,13 +23,21 @@ enum class SearchProviderType {
 }
 
 data class SearchProviderConfig(
+    @SerializedName(value = "id", alternate = ["a"])
     val id: String = UUID.randomUUID().toString(),
+    @SerializedName(value = "name", alternate = ["b"])
     val name: String,
-    val type: SearchProviderType,
+    @SerializedName(value = "type", alternate = ["c"])
+    val type: SearchProviderType?,
+    @SerializedName(value = "baseUrl", alternate = ["d"])
     val baseUrl: String = "",
+    @SerializedName(value = "apiKey", alternate = ["e"])
     val apiKey: String = "",
+    @SerializedName(value = "enabled", alternate = ["f"])
     val enabled: Boolean = true,
+    @SerializedName(value = "resultLimit", alternate = ["g"])
     val resultLimit: Int = 5,
+    @SerializedName(value = "customHeaders", alternate = ["h"])
     val customHeaders: Map<String, String> = emptyMap()
 )
 

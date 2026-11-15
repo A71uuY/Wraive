@@ -669,6 +669,9 @@ class AppRepository(
 
     private fun refreshMemories() {
         _memories.value = load(WraiveDatabase.KIND_MEMORY, MemoryEntry::class.java)
+            .map { entry ->
+                entry.copy(category = entry.effectiveCategory)
+            }
     }
 
     private fun refreshWorldBooks() {
@@ -689,7 +692,7 @@ class AppRepository(
         ).map {
             it.copy(
                 apiKey = secrets.get(SECRET_SEARCH, it.id),
-                name = it.name.orEmpty().ifBlank { it.type.name },
+                name = it.name.orEmpty().ifBlank { it.type?.name ?: "搜索服务" },
                 baseUrl = it.baseUrl.orEmpty(),
                 customHeaders = it.customHeaders.orEmpty(),
                 resultLimit = it.resultLimit.takeIf { limit -> limit > 0 } ?: 5

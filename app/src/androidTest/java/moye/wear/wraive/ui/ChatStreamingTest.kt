@@ -2,14 +2,19 @@ package moye.wear.wraive.ui
 
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
+import androidx.compose.ui.test.performRotaryScrollInput
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.swipeDown
 import androidx.wear.compose.material3.AppScaffold
+import androidx.compose.ui.semantics.SemanticsProperties
 import moye.wear.wraive.model.ChatMessage
 import moye.wear.wraive.model.Conversation
 import moye.wear.wraive.model.MessageRole
@@ -18,11 +23,87 @@ import moye.wear.wraive.model.TranscriptionConfig
 import moye.wear.wraive.ui.screens.ChatScreen
 import moye.wear.wraive.ui.theme.WraiveTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
 class ChatStreamingTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test
+    fun rotaryScrollSurvivesStreamedRecompositions() {
+        val conversation = Conversation(id = "rotary-chat", assistantId = "assistant")
+        val reply = mutableStateOf(ChatMessage(
+            id = "rotary-reply", conversationId = conversation.id, role = MessageRole.ASSISTANT,
+            content = "表冠滚动时继续生成内容。\n".repeat(80), status = MessageStatus.STREAMING
+        ))
+        compose.setContent {
+            WraiveTheme(dynamicColor = false, localeTag = "zh") {
+                AppScaffold {
+                    ChatScreen(conversation, listOf(reply.value), emptyList(), true, true, false,
+                        readAttachment = { emptyList() }, transcriptionConfig = TranscriptionConfig(),
+                        startRecording = {}, stopAndTranscribe = { "" }, cancelRecording = {},
+                        onSend = { _, _ -> }, onStop = {}, onMessageActions = {})
+                }
+            }
+        }
+        compose.waitForIdle()
+        fun position() = compose.onNodeWithTag("chat-list").fetchSemanticsNode()
+            .config[SemanticsProperties.VerticalScrollAxisRange].value()
+
+        var previous = position()
+        repeat(3) {
+            compose.runOnIdle { reply.value = reply.value.copy(content = reply.value.content + "追加内容。\n") }
+            compose.onNodeWithTag("chat-list").performRotaryScrollInput {
+                repeat(6) {
+                    rotateToScrollVertically(-48f)
+                    advanceEventTime(16)
+                }
+            }
+            compose.mainClock.advanceTimeBy(500)
+            compose.waitForIdle()
+            val current = position()
+            assertTrue("The crown must keep scrolling toward older messages after recomposition", current < previous)
+            previous = current
+        }
+        compose.onNodeWithContentDescription("回到最新消息").assertIsDisplayed()
+    }
+
+    @Test
+    fun rotaryScrollResumesAfterClosingInput() {
+        val conversation = Conversation(id = "input-chat", assistantId = "assistant")
+        val reply = ChatMessage(
+            conversationId = conversation.id, role = MessageRole.ASSISTANT,
+            content = "关闭输入窗口后继续阅读历史消息。\n".repeat(80)
+        )
+        compose.setContent {
+            WraiveTheme(dynamicColor = false, localeTag = "zh") {
+                AppScaffold {
+                    ChatScreen(conversation, listOf(reply), emptyList(), false, true, false,
+                        readAttachment = { emptyList() }, transcriptionConfig = TranscriptionConfig(),
+                        startRecording = {}, stopAndTranscribe = { "" }, cancelRecording = {},
+                        onSend = { _, _ -> }, onStop = {}, onMessageActions = {})
+                }
+            }
+        }
+        compose.onNodeWithContentDescription("输入").performClick()
+        compose.onNode(hasSetTextAction()).performTextInput("继续")
+        compose.onNode(hasSetTextAction()).performImeAction()
+        compose.waitForIdle()
+        val before = compose.onNodeWithTag("chat-list").fetchSemanticsNode()
+            .config[SemanticsProperties.VerticalScrollAxisRange].value()
+        compose.onNodeWithTag("chat-list").performRotaryScrollInput {
+            repeat(6) {
+                rotateToScrollVertically(-48f)
+                advanceEventTime(16)
+            }
+        }
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+        val after = compose.onNodeWithTag("chat-list").fetchSemanticsNode()
+            .config[SemanticsProperties.VerticalScrollAxisRange].value()
+        assertTrue("The chat must regain crown focus after closing input", after < before)
+    }
 
     @Test
     fun longMarkdownReplyCanBeOpened() = openLongReply(markdownEnabled = true)
@@ -94,6 +175,10 @@ class ChatStreamingTest {
         compose.onNodeWithTag("chat-list").performTouchInput { swipeDown() }
         compose.waitForIdle()
         compose.onNodeWithContentDescription("回到最新消息").assertIsDisplayed()
+        val viewport = compose.onNodeWithTag("chat-list").fetchSemanticsNode().boundsInRoot
+        val jump = compose.onNodeWithTag("chat-jump-to-bottom").fetchSemanticsNode().boundsInRoot
+        assertTrue("Jump button must occupy the lower right of the viewport", jump.center.x > viewport.center.x && jump.top > viewport.center.y)
+        assertTrue("Jump button must remain above the bottom input control", jump.bottom < viewport.bottom)
         val readingPosition = compose.onNodeWithTag("message-reply").fetchSemanticsNode().positionInRoot.y
         compose.runOnIdle { reply.value = reply.value.copy(content = reply.value.content + "继续生成。\n".repeat(12)) }
         compose.waitForIdle()

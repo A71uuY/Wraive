@@ -12,6 +12,7 @@ import moye.wear.wraive.model.AttachmentKind
 import moye.wear.wraive.model.MessageRole
 import moye.wear.wraive.model.ModelConfig
 import moye.wear.wraive.model.ProviderConfig
+import moye.wear.wraive.model.ProviderProtocol
 import moye.wear.wraive.model.StreamEvent
 import moye.wear.wraive.model.TokenUsage
 import moye.wear.wraive.model.ToolCall
@@ -53,6 +54,9 @@ class AnthropicClient(
             request.assistant.customHeaders
         ).post(gson.toJson(payload).toRequestBody(JSON)).build()
         val call = httpClient.newCall(httpRequest)
+        val deepSeek = if (request.provider.isOfficialDeepSeek()) {
+            DeepSeekStreamState(ProviderProtocol.ANTHROPIC)
+        } else null
         try {
             call.execute().requireSuccess().use { response ->
                 val source = response.body.source()
@@ -61,8 +65,10 @@ class AnthropicClient(
                     if (!line.startsWith("data:")) continue
                     val data = line.removePrefix("data:").trim()
                     parseChunk(data)?.let { emit(it) }
+                    deepSeek?.consume(data)?.let { emit(it) }
                 }
             }
+            check(deepSeek == null || deepSeek.finished) { "DeepSeek 响应中断，请重试" }
             emit(StreamEvent.Completed)
         } finally {
             call.cancel()
@@ -100,14 +106,38 @@ class AnthropicClient(
         })
     }
 
-    private fun messageBlocks(request: CompletionRequest): JsonArray = JsonArray().apply {
+    internal fun messageBlocks(request: CompletionRequest): JsonArray = JsonArray().apply {
+        var previousWasTool = false
         request.messages.filter { it.role != MessageRole.SYSTEM }.forEach { message ->
+            if (message.role == MessageRole.TOOL) {
+                val results = JsonArray().apply {
+                    message.toolCalls.forEach { tool ->
+                        add(JsonObject().apply {
+                            addProperty("type", "tool_result")
+                            addProperty("tool_use_id", tool.providerCallId)
+                            addProperty("content", tool.result ?: tool.error.orEmpty())
+                            addProperty("is_error", tool.error != null)
+                        })
+                    }
+                }
+                if (previousWasTool) {
+                    last().asJsonObject.getAsJsonArray("content").addAll(results)
+                } else {
+                    add(JsonObject().apply {
+                        addProperty("role", "user")
+                        add("content", results)
+                    })
+                }
+                previousWasTool = true
+                return@forEach
+            }
+            previousWasTool = false
             add(JsonObject().apply {
                 addProperty(
                     "role",
                     if (message.role == MessageRole.ASSISTANT) "assistant" else "user"
                 )
-                add("content", JsonArray().apply {
+                add("content", request.savedProviderContent(message) ?: JsonArray().apply {
                     if (message.content.isNotBlank()) add(JsonObject().apply {
                         addProperty("type", "text")
                         addProperty("text", message.content)
@@ -135,16 +165,6 @@ class AnthropicClient(
                             })
                         }
                     }
-                    if (message.role == MessageRole.TOOL) {
-                        message.toolCalls.forEach { tool ->
-                            add(JsonObject().apply {
-                                addProperty("type", "tool_result")
-                                addProperty("tool_use_id", tool.id)
-                                addProperty("content", tool.result ?: tool.error.orEmpty())
-                                addProperty("is_error", tool.error != null)
-                            })
-                        }
-                    }
                     if (message.role == MessageRole.ASSISTANT) {
                         message.toolCalls.forEach { tool ->
                             add(JsonObject().apply {
@@ -162,6 +182,10 @@ class AnthropicClient(
 
     private fun anthropicTools(definitions: List<JsonObject>): JsonArray = JsonArray().apply {
         definitions.forEach { definition ->
+            if (definition.string("type") != "function") {
+                add(definition)
+                return@forEach
+            }
             val function = definition.getAsJsonObject("function") ?: definition
             add(JsonObject().apply {
                 addProperty("name", function.string("name"))
@@ -176,9 +200,10 @@ class AnthropicClient(
         }
     }
 
-    private fun parseChunk(data: String): StreamEvent? {
+    internal fun parseChunk(data: String): StreamEvent? {
         val root = parseJson(data).asJsonObject
         return when (root.string("type")) {
+            "error" -> error(root.objectOrNull("error")?.string("message") ?: "Message stream failed")
             "content_block_start" -> {
                 val block = root.getAsJsonObject("content_block")
                 if (block?.string("type") == "tool_use") {
@@ -214,7 +239,11 @@ class AnthropicClient(
                     StreamEvent.Usage(TokenUsage(inputTokens = usage.int("input_tokens")))
                 }
             "message_delta" -> root.getAsJsonObject("usage")?.let { usage ->
-                StreamEvent.Usage(TokenUsage(outputTokens = usage.int("output_tokens")))
+                StreamEvent.Usage(TokenUsage(
+                    inputTokens = usage.int("input_tokens"),
+                    outputTokens = usage.int("output_tokens"),
+                    cachedTokens = usage.int("cache_read_input_tokens")
+                ))
             }
             else -> null
         }

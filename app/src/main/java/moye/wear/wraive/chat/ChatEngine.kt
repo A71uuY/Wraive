@@ -6,6 +6,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +30,7 @@ import moye.wear.wraive.model.RequestStatus
 import moye.wear.wraive.model.StreamEvent
 import moye.wear.wraive.model.TokenUsage
 import moye.wear.wraive.model.ToolCall
+import moye.wear.wraive.model.ProviderMessageContent
 import moye.wear.wraive.network.AiGateway
 import moye.wear.wraive.network.CompletionRequest
 import moye.wear.wraive.network.ImageGenerationRequest
@@ -134,7 +137,9 @@ class ChatEngine(
     ) {
         require(message.role == MessageRole.USER)
         jobs[conversation.id]?.cancel()
-        val edited = message.copy(content = content.trim(), updatedAt = System.currentTimeMillis())
+        val edited = message.copy(
+            content = content.trim(), providerContent = null, updatedAt = System.currentTimeMillis()
+        )
         if (conversation.temporary) {
             val retained = _temporaryMessages.value[conversation.id].orEmpty()
                 .filter { it.createdAt <= message.createdAt }
@@ -257,14 +262,15 @@ class ChatEngine(
                 compressed.history,
                 repository.promptTransforms.value
             ).toMutableList()
-            val tools = toolRuntime.prepare(assistant)
+            val tools = toolRuntime.prepare(assistant, provider, model)
             var finalPreview = ""
-            var round = 0
-            while (round < MAX_TOOL_ROUNDS) {
+            while (true) {
+                currentCoroutineContext().ensureActive()
                 val messageId = UUID.randomUUID().toString()
-                val createdAt = System.currentTimeMillis() + round
+                val createdAt = maxOf(System.currentTimeMillis(), (history.lastOrNull()?.createdAt ?: 0) + 1)
                 var content = ""
                 var reasoning = ""
+                var providerContent: ProviderMessageContent? = null
                 var usage = TokenUsage()
                 val calls = linkedMapOf<String, ToolCall>()
                 fun active(status: MessageStatus = MessageStatus.STREAMING): ChatMessage = ChatMessage(
@@ -273,6 +279,7 @@ class ChatEngine(
                     role = MessageRole.ASSISTANT,
                     content = content,
                     reasoning = reasoning,
+                    providerContent = providerContent,
                     toolCalls = calls.values.toList(),
                     status = status,
                     providerId = provider.id,
@@ -296,6 +303,7 @@ class ChatEngine(
                         is StreamEvent.TextDelta -> content += event.text
                         is StreamEvent.ReasoningDelta -> reasoning += event.text
                         is StreamEvent.ToolDelta -> mergeToolDelta(calls, event.call)
+                        is StreamEvent.ProviderContent -> providerContent = event.content
                         is StreamEvent.Usage -> usage = usage.merge(event.usage)
                         StreamEvent.Completed -> Unit
                     }
@@ -312,6 +320,7 @@ class ChatEngine(
                 if (calls.isEmpty()) break
 
                 calls.values.forEach { call ->
+                    currentCoroutineContext().ensureActive()
                     val completed = toolRuntime.execute(call, tools)
                     val toolMessage = ChatMessage(
                         conversationId = originalConversation.id,
@@ -333,8 +342,6 @@ class ChatEngine(
                     }
                 }
                 _activeMessages.value -= originalConversation.id
-                if (round == MAX_TOOL_ROUNDS - 1) error("工具调用轮次过多")
-                round++
             }
             finishConversation(originalConversation, initialHistory, finalPreview)
             if (
@@ -436,7 +443,8 @@ class ChatEngine(
         }
         if (summary.isNotBlank()) {
             repository.upsertConversation(
-                conversation.copy(summary = summary, updatedAt = System.currentTimeMillis())
+                (repository.conversations.value.firstOrNull { it.id == conversation.id } ?: conversation)
+                    .copy(summary = summary, updatedAt = System.currentTimeMillis())
             )
         }
         return CompressedContext(keep, summary.ifBlank { conversation.summary })
@@ -515,18 +523,20 @@ class ChatEngine(
         history: List<ChatMessage>,
         preview: String
     ) {
+        val current = repository.conversations.value.firstOrNull { it.id == conversation.id }
+            ?: conversation
         val firstUser = history.firstOrNull { it.role == MessageRole.USER }?.content.orEmpty()
         val title = if (
             preferencesStore.preferences.value.autoTitle &&
-            conversation.title == "新对话" &&
+            current.title == "新对话" &&
             firstUser.isNotBlank()
         ) {
             firstUser.lineSequence().first().take(24)
         } else {
-            conversation.title
+            current.title
         }
         repository.upsertConversation(
-            conversation.copy(
+            current.copy(
                 title = title,
                 updatedAt = System.currentTimeMillis(),
                 lastMessagePreview = preview.take(80)
@@ -634,10 +644,6 @@ class ChatEngine(
     private fun estimateTokens(messages: List<ChatMessage>): Int = messages.sumOf { message ->
         (message.content.length + message.reasoning.length +
             message.attachments.sumOf { it.extractedText?.length ?: 0 }) / 4 + 16
-    }
-
-    private companion object {
-        const val MAX_TOOL_ROUNDS = 4
     }
 
     private data class CompressedContext(

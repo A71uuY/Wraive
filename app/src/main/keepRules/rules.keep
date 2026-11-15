@@ -16,6 +16,12 @@
 # available for the repository's compatibility conversion.
 -keep enum moye.wear.wraive.model.ModelCapability { *; }
 
+# Memory extraction uses valueOf and Gson; preserve every category in release builds.
+-keep enum moye.wear.wraive.model.MemoryCategory { *; }
+
+# Search configurations use Gson reflection to persist every selectable provider.
+-keep enum moye.wear.wraive.model.SearchProviderType { *; }
+
 # Preserve SDK calls so the device's Wear implementation wins class loading.
 -keep class com.google.wear.input.WearHapticFeedbackConstants {
     public static int getScrollItemFocus();

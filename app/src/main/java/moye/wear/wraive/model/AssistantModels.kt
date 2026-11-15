@@ -1,5 +1,6 @@
 package moye.wear.wraive.model
 
+import com.google.gson.annotations.SerializedName
 import java.util.UUID
 
 data class AssistantProfile(
@@ -47,16 +48,32 @@ data class WorldBookEntry(
 )
 
 data class MemoryEntry(
+    @SerializedName(value = "id", alternate = ["a"])
     val id: String = UUID.randomUUID().toString(),
+    @SerializedName(value = "assistantId", alternate = ["b"])
     val assistantId: String? = null,
-    val category: MemoryCategory,
+    @SerializedName(value = "category", alternate = ["c"])
+    val category: MemoryCategory?,
+    @SerializedName(value = "content", alternate = ["d"])
     val content: String,
+    @SerializedName(value = "enabled", alternate = ["e"])
     val enabled: Boolean = true,
+    @SerializedName(value = "createdAt", alternate = ["f"])
     val createdAt: Long = System.currentTimeMillis(),
+    @SerializedName(value = "updatedAt", alternate = ["g"])
     val updatedAt: Long = createdAt
-)
+) {
+    // Older releases may have persisted a missing category through Gson.
+    val effectiveCategory: MemoryCategory
+        get() = category ?: MemoryCategory.IDENTITY
+}
 
-enum class MemoryCategory { IDENTITY, WORKFLOW, VOICE, INSTRUCTION }
+enum class MemoryCategory {
+    @SerializedName(value = "IDENTITY", alternate = ["g"]) IDENTITY,
+    @SerializedName("WORKFLOW") WORKFLOW,
+    @SerializedName("VOICE") VOICE,
+    @SerializedName("INSTRUCTION") INSTRUCTION
+}
 
 data class PromptTransform(
     val id: String = UUID.randomUUID().toString(),

@@ -205,6 +205,13 @@ fun AppNavigation(graph: AppGraph) {
                 } else {
                     ConversationActionsScreen(
                         conversation = conversation,
+                        onRename = { title ->
+                            scope.launch {
+                                graph.repository.upsertConversation(
+                                    conversation.copy(title = title, updatedAt = System.currentTimeMillis())
+                                )
+                            }
+                        },
                         onPin = {
                             scope.launch {
                                 graph.repository.upsertConversation(
@@ -269,6 +276,8 @@ fun AppNavigation(graph: AppGraph) {
                     }
                     ChatScreen(
                         conversation = conversation,
+                        assistantName = assistants.firstOrNull { it.id == conversation.assistantId }
+                            ?.name.orEmpty(),
                         messages = messages,
                         quickPhrases = quickPhrases,
                         generating = conversation.id in generating,

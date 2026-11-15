@@ -1,5 +1,7 @@
 package moye.wear.wraive.ui
 
+import android.os.SystemClock
+import android.util.Log
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
@@ -8,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performRotaryScrollInput
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.wear.compose.material3.AppScaffold
 import androidx.compose.ui.unit.dp
@@ -19,6 +22,8 @@ import moye.wear.wraive.model.TranscriptionConfig
 import moye.wear.wraive.ui.screens.ChatScreen
 import moye.wear.wraive.ui.theme.WraiveTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import androidx.compose.ui.semantics.SemanticsProperties
 import org.junit.Rule
 import org.junit.Test
 
@@ -78,6 +83,55 @@ class MessageReasoningUiTest {
         compose.onNodeWithContentDescription("回到最新消息").assertIsDisplayed()
         compose.onNodeWithText("思考中").performClick()
         compose.onNodeWithText(reply.value.reasoning).assertDoesNotExist()
+    }
+
+    @Test
+    fun longReasoningCanExpandAndKeepStreaming() {
+        reply.value = reply.value.copy(
+            content = "", reasoning = "先核对已有信息，再逐步分析每一种可能的情况。\n".repeat(1_500),
+            status = MessageStatus.STREAMING
+        )
+        showChat()
+        val expandStarted = SystemClock.elapsedRealtimeNanos()
+        compose.onNodeWithText("思考中").performClick()
+        compose.waitForIdle()
+        val expandMs = (SystemClock.elapsedRealtimeNanos() - expandStarted) / 1_000_000
+        val streamStarted = SystemClock.elapsedRealtimeNanos()
+        repeat(10) {
+            compose.runOnIdle { reply.value = reply.value.copy(reasoning = reply.value.reasoning + "继续核对。") }
+            compose.waitForIdle()
+        }
+        val streamMs = (SystemClock.elapsedRealtimeNanos() - streamStarted) / 1_000_000
+        Log.i("WraiveReasoningPerf", "expand_ms=$expandMs ten_updates_ms=$streamMs")
+        compose.onNodeWithText("思考中").assertIsDisplayed().performClick()
+        compose.onNodeWithText(reply.value.reasoning).assertDoesNotExist()
+    }
+
+    @Test
+    fun longReasoningLoadsOnScrollAndStillFollowsTheBottom() {
+        reply.value = reply.value.copy(
+            content = "", reasoning = "先核对信息。\n".repeat(1_500) + "思考末尾标记", status = MessageStatus.STREAMING
+        )
+        showChat()
+        compose.onNodeWithText("思考中").performClick()
+        compose.onNodeWithText("思考末尾标记", substring = true).assertDoesNotExist()
+        compose.onNodeWithContentDescription("回到最新消息").performClick()
+        compose.onNodeWithText("思考末尾标记", substring = true).assertIsDisplayed()
+        compose.runOnIdle { reply.value = reply.value.copy(reasoning = reply.value.reasoning + "\n继续分析。".repeat(100)) }
+        compose.onNodeWithTag("chat-bottom").assertIsDisplayed()
+        val before = compose.onNodeWithTag("chat-list").fetchSemanticsNode()
+            .config[SemanticsProperties.VerticalScrollAxisRange].value()
+        compose.onNodeWithTag("chat-list").performRotaryScrollInput {
+            repeat(6) {
+                rotateToScrollVertically(-48f)
+                advanceEventTime(16)
+            }
+        }
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+        val after = compose.onNodeWithTag("chat-list").fetchSemanticsNode()
+            .config[SemanticsProperties.VerticalScrollAxisRange].value()
+        assertTrue("The crown must scroll the expanded reasoning toward older content", after < before)
     }
 
     @Test

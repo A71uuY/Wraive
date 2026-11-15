@@ -13,11 +13,11 @@ Wraive 使用 Kotlin 与 Jetpack Compose 构建，围绕手表的圆形屏幕、
 ## 功能
 
 - **模型与助手**：支持 OpenAI Chat Completions、OpenAI Responses、Anthropic 和 Google 接口；按供应商管理模型，自定义助手与生成参数。
-- **文字与语音**：流式回复、语音输入、回复朗读、Markdown 显示，以及图片和文档附件。
+- **文字与语音**：流式回复、语音输入、回复朗读、Markdown 与 LaTeX 公式显示，以及图片和文档附件；AI 回复显示助手名称。
 - **搜索与工具**：联网搜索、MCP 工具、长期记忆、世界书、提示词转换和翻译工作台。
-- **会话管理**：置顶、归档、临时对话、全局搜索，以及 Markdown / HTML 导出。
+- **会话管理**：标题编辑、置顶、归档、临时对话、全局搜索，以及 Markdown / HTML 导出。
 - **备份与恢复**：本地备份、S3 兼容云端加密备份，以及供应商配置的二维码分享与导入。
-- **手表体验**：圆屏适配、表冠滚动、原生 Wear Material 3 组件、动态配色、自定义字体和中英文界面。
+- **手表体验**：圆屏适配、表冠滚动、内置文件选择器、原生 Wear Material 3 组件、动态配色、自定义字体和中英文界面。
 
 ## 开始使用
 
@@ -27,6 +27,8 @@ Wraive 使用 Kotlin 与 Jetpack Compose 构建，围绕手表的圆形屏幕、
 4. 回到首页，通过底部菜单创建新对话或临时对话。
 
 搜索、MCP、语音和云备份服务可在设置中按需配置。
+
+连接 DeepSeek 官方 API（`api.deepseek.com`）时，`deepseek-flash` 及其官方兼容别名默认启用联网搜索和链接读取，由 DeepSeek 服务端执行，并保留引用来源与多轮网页上下文。`deepseek-v4-pro` 使用 Responses 或 Anthropic 协议时默认启用官方联网搜索。能力与接入格式见 [DeepSeek Web Tools](https://api-docs.deepseek.com/guides/web_tools/)、[Responses](https://api-docs.deepseek.com/guides/responses_api/) 和 [Anthropic](https://api-docs.deepseek.com/guides/anthropic_api/) 文档。
 
 ## 构建与安装
 

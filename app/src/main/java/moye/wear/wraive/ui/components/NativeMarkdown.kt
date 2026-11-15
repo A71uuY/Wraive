@@ -36,6 +36,7 @@ import io.noties.markwon.ext.tables.TablePlugin
 import io.noties.markwon.ext.tasklist.TaskListPlugin
 import io.noties.markwon.html.HtmlPlugin
 import io.noties.markwon.inlineparser.MarkwonInlineParserPlugin
+import io.noties.markwon.image.AsyncDrawableScheduler
 
 @Composable
 internal fun MarkdownMessageText(text: String, color: Color) {
@@ -76,11 +77,10 @@ private fun NativeMarkdownText(markdown: String, color: Color) {
         update = { textView ->
             textView.setTextColor(textColor)
             textView.setLinkTextColor(textColor)
-            if (textView.tag != normalized) {
-                textView.tag = normalized
-                markwon.setMarkdown(textView, normalized)
-            }
+            setStreamingMarkdown(markwon, textView, normalized)
         },
+        onReset = null,
+        onRelease = { AsyncDrawableScheduler.unschedule(it) },
         modifier = Modifier.fillMaxWidth()
     )
 }
@@ -96,10 +96,10 @@ internal fun createNativeMarkwon(
     .usePlugin(TaskListPlugin.create(context))
     .usePlugin(HtmlPlugin.create())
     .usePlugin(SoftBreakAddsNewLinePlugin.create())
-    .usePlugin(JLatexMathPlugin.create(textSizePx) { builder ->
+    .usePlugin(StreamingLatexPlugin(JLatexMathPlugin.create(textSizePx) { builder ->
         builder.inlinesEnabled(true)
         builder.theme().textColor(textColor)
-    })
+    }))
     .build()
 
 @Composable
@@ -197,17 +197,6 @@ private fun splitFencedSegments(text: String): List<MarkdownSegment> {
         result += MarkdownSegment(text.substring(cursor), MarkdownSegmentKind.MARKDOWN)
     }
     return result.filter { it.content.isNotBlank() }
-}
-
-private fun normalizeLatexDelimiters(markdown: String): String {
-    val blockDelimiter = "${'$'}${'$'}"
-    return markdown
-        .replace(Regex("\\\\\\[([\\s\\S]*?)\\\\]")) { match ->
-            "\n$blockDelimiter\n${match.groupValues[1].trim()}\n$blockDelimiter\n"
-        }
-        .replace(Regex("\\\\\\((.+?)\\\\\\)")) { match ->
-            "$blockDelimiter${match.groupValues[1]}$blockDelimiter"
-        }
 }
 
 private fun highlightCode(

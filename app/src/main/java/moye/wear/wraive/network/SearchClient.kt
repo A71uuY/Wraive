@@ -37,6 +37,7 @@ class SearchClient(
                 SearchProviderType.BOCHA -> bocha(config, query)
                 SearchProviderType.GROK -> grok(config, query)
                 SearchProviderType.CUSTOM -> generic(config, query)
+                null -> error("请重新选择搜索服务类型后保存")
             }.take(config.resultLimit)
         }
 

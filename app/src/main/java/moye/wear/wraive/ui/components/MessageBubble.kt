@@ -18,12 +18,12 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -41,8 +41,15 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.wear.compose.material3.MaterialTheme
@@ -63,14 +70,29 @@ import java.text.DateFormat
 import java.util.Date
 
 @Composable
-fun MessageBubble(
+internal fun MessageBubble(
     message: ChatMessage,
     showReasoning: Boolean,
     markdownEnabled: Boolean,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
-    onReasoningExpanded: () -> Unit = {}
+    onReasoningToggle: () -> Unit,
+    reasoningExpanded: Boolean,
+    part: MessagePart = MessagePart.FULL,
+    reasoningText: String = "",
+    assistantName: String = ""
 ) {
+    if (part == MessagePart.REASONING) {
+        SelectionContainer(modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerLow)) {
+            Text(
+                text = reasoningText.removeSuffix("\n"),
+                modifier = Modifier.padding(horizontal = 18.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        return
+    }
     if (message.role == MessageRole.TOOL) {
         ToolMessage(message, modifier)
         return
@@ -87,16 +109,19 @@ fun MessageBubble(
     } else {
         MaterialTheme.colorScheme.onSurface
     }
-    val shape = if (assistant) CardDefaults.shape else RoundedCornerShape(
-        topStart = 24.dp,
-        topEnd = 24.dp,
-        bottomStart = if (mine) 24.dp else 8.dp,
-        bottomEnd = if (mine) 8.dp else 24.dp
-    )
+    val shape = when (part) {
+        MessagePart.HEADER -> MaterialTheme.shapes.large.copy(bottomStart = CornerSize(0.dp), bottomEnd = CornerSize(0.dp))
+        MessagePart.FOOTER -> MaterialTheme.shapes.large.copy(topStart = CornerSize(0.dp), topEnd = CornerSize(0.dp))
+        else -> if (assistant) CardDefaults.shape else RoundedCornerShape(
+            topStart = 24.dp,
+            topEnd = 24.dp,
+            bottomStart = if (mine) 24.dp else 8.dp,
+            bottomEnd = if (mine) 8.dp else 24.dp
+        )
+    }
     val timestamp = remember(message.createdAt) {
         DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(message.createdAt))
     }
-    var reasoningExpanded by rememberSaveable(message.id) { mutableStateOf(false) }
     var previewImage by remember(message.id) { mutableStateOf<Attachment?>(null) }
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -110,13 +135,15 @@ fun MessageBubble(
                 .background(container)
                 .combinedClickable(onClick = {
                     if (!assistant && showReasoning && message.reasoning.isNotBlank()) {
-                        reasoningExpanded = !reasoningExpanded
+                        onReasoningToggle()
                     }
                 }, onLongClick = onLongClick)
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(start = 14.dp, end = 14.dp,
+                    top = if (part == MessagePart.FOOTER) 10.dp else 12.dp,
+                    bottom = if (part == MessagePart.HEADER) 8.dp else 12.dp),
             verticalArrangement = Arrangement.spacedBy(if (assistant) 10.dp else 6.dp)
         ) {
-            if (assistant) {
+            if (assistant && part != MessagePart.FOOTER) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -129,7 +156,7 @@ fun MessageBubble(
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = tr("AI 回复"),
+                        text = assistantName.ifBlank { tr("助手") },
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
@@ -142,22 +169,18 @@ fun MessageBubble(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            } else {
+            } else if (!assistant) {
                 Text(
                     text = tr(if (mine) "你" else "助手"),
                     style = MaterialTheme.typography.labelSmall,
                     color = if (mine) contentColor else MaterialTheme.colorScheme.primary
                 )
             }
-            if (assistant && showReasoning && message.reasoning.isNotBlank()) {
-                ReasoningSection(
-                    reasoning = message.reasoning,
+            if (assistant && part != MessagePart.FOOTER && showReasoning && message.reasoning.isNotBlank()) {
+                ReasoningButton(
                     thinking = message.status == MessageStatus.STREAMING && message.content.isBlank(),
                     expanded = reasoningExpanded,
-                    onToggle = {
-                        reasoningExpanded = !reasoningExpanded
-                        if (reasoningExpanded) onReasoningExpanded()
-                    }
+                    onToggle = onReasoningToggle
                 )
             } else if (!assistant && showReasoning && message.reasoning.isNotBlank()) {
                 Text(
@@ -175,7 +198,7 @@ fun MessageBubble(
                     }
                 }
             }
-            if (message.content.isNotBlank()) {
+            if (part != MessagePart.HEADER && message.content.isNotBlank()) {
                 SelectionContainer {
                     if (markdownEnabled) {
                         MarkdownMessageText(message.content, contentColor)
@@ -184,7 +207,22 @@ fun MessageBubble(
                     }
                 }
             }
-            message.attachments.forEach { attachment ->
+            val citations = message.providerContent?.citations.orEmpty()
+            if (part != MessagePart.HEADER && citations.isNotEmpty()) {
+                Text(
+                    text = buildAnnotatedString {
+                        citations.forEachIndexed { index, citation ->
+                            if (index > 0) append("\n")
+                            withLink(LinkAnnotation.Url(
+                                citation.url,
+                                TextLinkStyles(SpanStyle(color = MaterialTheme.colorScheme.primary))
+                            )) { append("${index + 1}. ${citation.title}") }
+                        }
+                    },
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            message.attachments.takeIf { part != MessagePart.HEADER }.orEmpty().forEach { attachment ->
                 if (attachment.kind == AttachmentKind.IMAGE) {
                     AsyncImage(
                         model = attachment.uri,
@@ -212,9 +250,9 @@ fun MessageBubble(
                     )
                 }
             }
-            if (assistant) {
+            if (assistant && part != MessagePart.HEADER) {
                 AssistantMessageStatus(message, showReasoning)
-            } else {
+            } else if (!assistant) {
                 val status = when (message.status) {
                     MessageStatus.STREAMING -> " · 生成中"
                     MessageStatus.FAILED -> " · 失败"
@@ -227,7 +265,7 @@ fun MessageBubble(
                     color = contentColor.copy(alpha = 0.58f)
                 )
             }
-            message.error?.let {
+            message.error?.takeIf { part != MessagePart.HEADER }?.let {
                 Text(
                     text = it,
                     style = MaterialTheme.typography.labelSmall,
@@ -275,60 +313,47 @@ fun MessageBubble(
 }
 
 @Composable
-private fun ReasoningSection(
-    reasoning: String,
+private fun ReasoningButton(
     thinking: Boolean,
     expanded: Boolean,
     onToggle: () -> Unit
 ) {
     val expansionState = tr(if (expanded) "已展开" else "已收起")
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button(
-            onClick = onToggle,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                .semantics { stateDescription = expansionState },
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                contentColor = MaterialTheme.colorScheme.onSurface
-            )
+    Button(
+        onClick = onToggle,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            .semantics { stateDescription = expansionState },
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        )
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                if (thinking) {
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                } else {
-                    Icon(
-                        Icons.Default.Psychology,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-                Text(
-                    text = tr(if (thinking) "思考中" else "思考过程"),
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.labelSmall
-                )
+            if (thinking) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            } else {
                 Icon(
-                    if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    Icons.Default.Psychology,
                     contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(18.dp)
                 )
             }
-        }
-        if (expanded) {
-            SelectionContainer {
-                Text(
-                    text = reasoning,
-                    modifier = Modifier.padding(horizontal = 4.dp),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Text(
+                text = tr(if (thinking) "思考中" else "思考过程"),
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.labelSmall
+            )
+            Icon(
+                if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }
@@ -377,19 +402,24 @@ private fun AssistantMessageStatus(message: ChatMessage, showReasoning: Boolean)
 @Composable
 private fun ToolMessage(message: ChatMessage, modifier: Modifier) {
     val call = message.toolCalls.firstOrNull()
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .padding(10.dp)
+    Row(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.Center
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(
+            modifier = Modifier
+                .widthIn(max = 220.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.68f))
+                .padding(horizontal = 9.dp, vertical = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
             Text(
                 text = call?.name?.ifBlank { tr("工具") } ?: tr("工具"),
-                color = MaterialTheme.colorScheme.tertiary,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.86f),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 13.sp),
+                textAlign = TextAlign.Center
             )
             Text(
                 text = message.content.take(800),

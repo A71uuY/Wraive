@@ -30,6 +30,7 @@ import moye.wear.wraive.ui.components.WearActionButton
 import moye.wear.wraive.ui.components.WearListScreen
 import moye.wear.wraive.ui.components.WearSectionHeader
 import moye.wear.wraive.ui.components.WearSelectionField
+import moye.wear.wraive.ui.components.rememberWearFilePicker
 import moye.wear.wraive.ui.tr
 
 @Composable
@@ -43,10 +44,8 @@ fun AppearanceScreen(
     ) { granted ->
         onUpdate { it.copy(backgroundGeneration = granted) }
     }
-    val fontPicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) runCatching {
+    val fontPicker = rememberWearFilePicker { uri ->
+        runCatching {
             val file = File(context.filesDir, "custom-font.ttf")
             context.contentResolver.openInputStream(uri)?.use { input ->
                 file.outputStream().use(input::copyTo)
@@ -198,10 +197,8 @@ fun BackupScreen(
             }
         }
     }
-    val importLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) scope.launch {
+    val importLauncher = rememberWearFilePicker { uri ->
+        scope.launch {
             runCatching {
                 context.contentResolver.openInputStream(uri)?.use { backupService.import(it) }
                     ?: error("无法读取备份文件")
@@ -212,10 +209,8 @@ fun BackupScreen(
             }
         }
     }
-    val foreignImportLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) scope.launch {
+    val foreignImportLauncher = rememberWearFilePicker { uri ->
+        scope.launch {
             runCatching {
                 val name = uri.lastPathSegment.orEmpty()
                 context.contentResolver.openInputStream(uri)?.use {

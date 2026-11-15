@@ -248,6 +248,9 @@ private val englishStrings = mapOf(
     "搜索" to "Search",
     "添加搜索服务" to "Add search service",
     "删除搜索服务" to "Delete search service",
+    "搜索服务" to "Search service",
+    "请重新选择搜索服务类型" to "Select the search service type again",
+    "请重新选择搜索服务类型后保存" to "Select the search service type again and save",
     "结果数量" to "Result count",
     "服务器 URL" to "Server URL",
     "超时秒数" to "Timeout seconds",
@@ -303,6 +306,20 @@ private val englishStrings = mapOf(
     "输入" to "Input",
     "取消置顶" to "Unpin",
     "置顶" to "Pin",
+    "编辑标题" to "Edit title",
+    "对话标题" to "Conversation title",
+    "选择文件" to "Choose files",
+    "系统文件选择器" to "System file picker",
+    "访问本地文件" to "Access local files",
+    "授权文件访问" to "Grant file access",
+    "授权文件访问后，可直接浏览手表存储并选择文件。" to "Grant file access to browse your watch storage and choose files.",
+    "需要文件读取权限才能浏览本地文件" to "File access permission is required to browse local files",
+    "此设备无法打开系统文件选择器" to "This device cannot open the system file picker",
+    "此设备没有文件授权设置，请使用系统文件选择器或通过 ADB 授权" to "File access settings are unavailable. Use the system picker or grant access through ADB.",
+    "无法读取此目录" to "Cannot read this folder",
+    "上一级" to "Parent folder",
+    "正在读取文件…" to "Loading files…",
+    "此目录没有可选择的文件" to "No selectable files in this folder",
     "归档" to "Archive",
     "移出归档" to "Unarchive",
     "删除消息" to "Delete message",
@@ -343,6 +360,7 @@ private val englishStrings = mapOf(
 private fun english(text: String): String {
     englishStrings[text]?.let { return it }
     return when {
+        text.startsWith("选择 (") -> "Choose ${text.removePrefix("选择 ")}"
         text.startsWith("管理 ") -> "Manage ${text.removePrefix("管理 ")}"
         text.startsWith("附件 · ") -> "Attachment · ${text.removePrefix("附件 · ")}"
         text.startsWith("上次同步 ") -> "Last synced ${text.removePrefix("上次同步 ")}"

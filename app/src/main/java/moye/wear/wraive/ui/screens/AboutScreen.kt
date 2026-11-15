@@ -84,7 +84,7 @@ fun AboutScreen() {
             }
         }
         item(key = "footer") {
-            Text("Wraive · Made for Wear OS",
+            Text("Wraive · By MOYE",
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
                 style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))

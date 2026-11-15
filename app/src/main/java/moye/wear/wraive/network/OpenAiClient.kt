@@ -72,6 +72,9 @@ class OpenAiClient(
             request.assistant.customHeaders
         ).post(gson.toJson(payload).toRequestBody(JSON)).build()
         val call = httpClient.newCall(httpRequest)
+        val deepSeek = if (request.provider.isOfficialDeepSeek()) {
+            DeepSeekStreamState(ProviderProtocol.OPENAI_CHAT)
+        } else null
         try {
             call.execute().requireSuccess().use { response ->
                 val source = response.body.source()
@@ -81,8 +84,10 @@ class OpenAiClient(
                     val data = line.removePrefix("data:").trim()
                     if (data == "[DONE]") break
                     parseChatChunk(data).forEach { emit(it) }
+                    deepSeek?.consume(data)?.let { emit(it) }
                 }
             }
+            check(deepSeek == null || deepSeek.finished) { "DeepSeek 响应中断，请重试" }
             emit(StreamEvent.Completed)
         } finally {
             call.cancel()
@@ -97,9 +102,15 @@ class OpenAiClient(
             addProperty("top_p", request.assistant.topP)
             request.assistant.maxOutputTokens?.let { addProperty("max_output_tokens", it) }
             if (request.systemPrompt.isNotBlank()) addProperty("instructions", request.systemPrompt)
-            add("input", responsesInput(request.messages))
+            add("input", responsesInput(request))
             if (request.toolDefinitions.isNotEmpty()) add("tools", JsonArray().apply {
-                request.toolDefinitions.forEach(::add)
+                request.toolDefinitions.forEach { definition ->
+                    add(if (definition.string("type") == "function") {
+                        (definition.objectOrNull("function") ?: definition).deepCopy().apply {
+                            addProperty("type", "function")
+                        }
+                    } else definition)
+                }
             })
             merge(request.provider.customBody + request.assistant.customBody, gson)
         }
@@ -109,6 +120,9 @@ class OpenAiClient(
             request.assistant.customHeaders
         ).post(gson.toJson(payload).toRequestBody(JSON)).build()
         val call = httpClient.newCall(httpRequest)
+        val deepSeek = if (request.provider.isOfficialDeepSeek()) {
+            DeepSeekStreamState(ProviderProtocol.OPENAI_RESPONSES)
+        } else null
         try {
             call.execute().requireSuccess().use { response ->
                 val source = response.body.source()
@@ -118,15 +132,17 @@ class OpenAiClient(
                     val data = line.removePrefix("data:").trim()
                     if (data == "[DONE]") break
                     parseResponsesChunk(data)?.let { emit(it) }
+                    deepSeek?.consume(data)?.let { emit(it) }
                 }
             }
+            check(deepSeek == null || deepSeek.finished) { "DeepSeek 响应中断，请重试" }
             emit(StreamEvent.Completed)
         } finally {
             call.cancel()
         }
     }.flowOn(Dispatchers.IO)
 
-    private fun chatMessages(request: CompletionRequest): JsonArray = JsonArray().apply {
+    internal fun chatMessages(request: CompletionRequest): JsonArray = JsonArray().apply {
         if (request.systemPrompt.isNotBlank()) add(JsonObject().apply {
             addProperty("role", "system")
             addProperty("content", request.systemPrompt)
@@ -155,12 +171,19 @@ class OpenAiClient(
                 if (message.role == MessageRole.TOOL && message.toolCalls.isNotEmpty()) {
                     addProperty("tool_call_id", message.toolCalls.first().providerCallId)
                 }
+                request.savedProviderContent(message)?.objectOrNull()?.entrySet()?.forEach { (name, value) ->
+                    add(name, value)
+                }
             })
         }
     }
 
-    private fun responsesInput(messages: List<ChatMessage>): JsonArray = JsonArray().apply {
-        messages.filter { it.role != MessageRole.SYSTEM }.forEach { message ->
+    internal fun responsesInput(request: CompletionRequest): JsonArray = JsonArray().apply {
+        request.messages.filter { it.role != MessageRole.SYSTEM }.forEach { message ->
+            request.savedProviderContent(message)?.takeIf { it.isJsonArray }?.let { saved ->
+                saved.asJsonArray.forEach(::add)
+                return@forEach
+            }
             if (message.role == MessageRole.TOOL) {
                 message.toolCalls.forEach { tool ->
                     add(JsonObject().apply {
@@ -253,6 +276,7 @@ class OpenAiClient(
 
     internal fun parseChatChunk(data: String): List<StreamEvent> {
         val root = parseJson(data).objectOrNull() ?: return emptyList()
+        root.objectOrNull("error")?.let { error(it.string("message") ?: "DeepSeek stream failed") }
         val usage = root.objectOrNull("usage")
         val events = mutableListOf<StreamEvent>()
         if (usage != null) {
@@ -275,6 +299,7 @@ class OpenAiClient(
             ?.let { events += StreamEvent.ReasoningDelta(it) }
         delta.arrayOrNull("tool_calls")?.forEach { element ->
             val call = element.objectOrNull() ?: return@forEach
+            if (call.string("type")?.let { it != "function" } == true) return@forEach
             val function = call.objectOrNull("function")
             events += StreamEvent.ToolDelta(
                 ToolCall(
@@ -294,6 +319,11 @@ class OpenAiClient(
             "response.output_text.delta" -> root.string("delta")?.let(StreamEvent::TextDelta)
             "response.reasoning_summary_text.delta" ->
                 root.string("delta")?.let(StreamEvent::ReasoningDelta)
+            "response.reasoning_text.delta" -> root.string("delta")?.let(StreamEvent::ReasoningDelta)
+            "response.failed", "error" -> {
+                val failure = root.objectOrNull("response")?.objectOrNull("error") ?: root.objectOrNull("error")
+                error(failure?.string("message") ?: root.string("message") ?: "Response stream failed")
+            }
             "response.function_call_arguments.delta" -> StreamEvent.ToolDelta(
                 ToolCall(
                     id = root.string("item_id").orEmpty(),
@@ -318,7 +348,7 @@ class OpenAiClient(
                     null
                 }
             }
-            "response.completed" -> {
+            "response.completed", "response.incomplete" -> {
                 val usage = root.objectOrNull("response")?.objectOrNull("usage")
                 usage?.let {
                     StreamEvent.Usage(

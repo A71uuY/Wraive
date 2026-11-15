@@ -4,14 +4,18 @@ import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import kotlinx.coroutines.CancellationException
 import moye.wear.wraive.data.AppRepository
 import moye.wear.wraive.model.AssistantProfile
 import moye.wear.wraive.model.McpServerConfig
 import moye.wear.wraive.model.McpTool
 import moye.wear.wraive.model.SearchProviderConfig
 import moye.wear.wraive.model.ToolCall
+import moye.wear.wraive.model.ProviderConfig
+import moye.wear.wraive.model.ModelConfig
 import moye.wear.wraive.network.McpClient
 import moye.wear.wraive.network.SearchClient
+import moye.wear.wraive.network.defaultDeepSeekTools
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.HttpUrl
@@ -28,7 +32,11 @@ class ToolRuntime(
     private val gson: Gson
 ) {
     private val fetchClient = httpClient.newBuilder().followRedirects(false).build()
-    suspend fun prepare(assistant: AssistantProfile): PreparedTools {
+    suspend fun prepare(
+        assistant: AssistantProfile,
+        provider: ProviderConfig,
+        model: ModelConfig
+    ): PreparedTools {
         val routes = mutableMapOf<String, ToolRoute>()
         val definitions = mutableListOf<JsonObject>()
         definitions += functionDefinition(
@@ -84,6 +92,9 @@ class ToolRuntime(
                     routes[exposedName] = ToolRoute.Mcp(server, tool)
                 }
             }
+        definitions += defaultDeepSeekTools(provider, model.id).filter { tool ->
+            tool.get("name")?.asString !in routes
+        }
         return PreparedTools(definitions, routes)
     }
 
@@ -110,6 +121,8 @@ class ToolRuntime(
                 null -> error("Unknown tool ${call.name}")
             }
             call.copy(result = result)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (error: Exception) {
             call.copy(error = error.message ?: error::class.java.simpleName)
         }

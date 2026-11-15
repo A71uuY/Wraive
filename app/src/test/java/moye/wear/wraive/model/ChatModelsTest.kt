@@ -9,6 +9,27 @@ class ChatModelsTest {
     private val gson = Gson()
 
     @Test
+    fun memoryCategoriesRoundTripWithStableNames() {
+        MemoryCategory.entries.forEach { category ->
+            val memory = MemoryEntry(category = category, content = "durable fact")
+            val restored = gson.fromJson(gson.toJson(memory), MemoryEntry::class.java)
+            assertEquals(memory, restored)
+            assertEquals(category.name, restored.effectiveCategory.name)
+        }
+    }
+
+    @Test
+    fun readsMemoryWrittenByThePublishedRelease() {
+        val json = """
+            {"a":"memory","b":"assistant","c":"g","d":"长期事实","e":true,"f":1000,"g":2000}
+        """.trimIndent()
+        assertEquals(
+            MemoryEntry("memory", "assistant", MemoryCategory.IDENTITY, "长期事实", true, 1000, 2000),
+            gson.fromJson(json, MemoryEntry::class.java)
+        )
+    }
+
+    @Test
     fun readsMessagesWrittenByThePublishedRelease() {
         // Field and enum aliases were verified against app/release/app-release.apk (0.1.0).
         val json = """

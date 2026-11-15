@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -37,6 +38,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.snapshotFlow
@@ -60,7 +62,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.foundation.rotary.rotaryScrollable
-import androidx.wear.compose.foundation.rotary.RotaryScrollableDefaults
+import androidx.wear.compose.foundation.hierarchicalFocusGroup
 import androidx.wear.compose.foundation.requestFocusOnHierarchyActive
 import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.EdgeButton
@@ -68,6 +70,7 @@ import androidx.wear.compose.material3.EdgeButtonDefaults
 import androidx.wear.compose.material3.EdgeButtonSize
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.FilledTonalIconButton
+import androidx.wear.compose.material3.IconButtonDefaults
 import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
@@ -83,8 +86,12 @@ import moye.wear.wraive.model.QuickPhrase
 import moye.wear.wraive.model.TranscriptionConfig
 import moye.wear.wraive.model.TranscriptionEngine
 import moye.wear.wraive.ui.components.MessageBubble
+import moye.wear.wraive.ui.components.MessagePart
+import moye.wear.wraive.ui.components.chatMessageItems
+import moye.wear.wraive.ui.components.rememberChatRotaryScrollableBehavior
 import moye.wear.wraive.ui.components.WearActionButton
 import moye.wear.wraive.ui.components.WearFisheyeScope
+import moye.wear.wraive.ui.components.rememberWearMultiFilePicker
 import moye.wear.wraive.ui.tr
 
 @Composable
@@ -102,13 +109,22 @@ fun ChatScreen(
     cancelRecording: () -> Unit,
     onSend: (String, List<Attachment>) -> Unit,
     onStop: () -> Unit,
-    onMessageActions: (ChatMessage) -> Unit
+    onMessageActions: (ChatMessage) -> Unit,
+    assistantName: String = ""
 ) {
     val state = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val focusRequester = remember { FocusRequester() }
+    val rotaryBehavior = rememberChatRotaryScrollableBehavior(state)
+    val configuration = LocalConfiguration.current
+    val floatingButtonBottom = (configuration.screenHeightDp.dp * 0.25f).coerceIn(36.dp, 52.dp)
     var followLatest by remember(conversation.id) { mutableStateOf(true) }
-    var lastMessageHeight by remember(conversation.id) { mutableIntStateOf(0) }
+    var lastMessageLayoutRevision by remember(conversation.id) { mutableIntStateOf(0) }
+    var expandedReasoningIds by rememberSaveable(conversation.id) { mutableStateOf(emptyList<String>()) }
+    val chatItems = remember(messages, expandedReasoningIds, showReasoning) {
+        chatMessageItems(messages, expandedReasoningIds, showReasoning)
+    }
+    val bottomIndex = if (messages.isEmpty()) 2 else chatItems.size + 1
     var showInput by remember { mutableStateOf(false) }
     val scrollConnection = remember(state) {
         object : NestedScrollConnection {
@@ -125,58 +141,58 @@ fun ChatScreen(
             }
     }
     // Follow measured growth instead of restarting an animation for every token.
-    LaunchedEffect(messages.size, lastMessageHeight, followLatest, state.isScrollInProgress) {
+    LaunchedEffect(bottomIndex, lastMessageLayoutRevision, followLatest, state.isScrollInProgress) {
         if (followLatest && messages.isNotEmpty() && !state.isScrollInProgress) {
-            state.requestScrollToItem(messages.size + 1)
+            state.requestScrollToItem(bottomIndex)
         }
     }
-    ScreenScaffold(
-        modifier = Modifier.fillMaxSize(),
-        scrollState = state,
-        timeText = { TimeText() },
-        edgeButton = {
-            val size = EdgeButtonSize.ExtraSmall
-            EdgeButton(
-                onClick = if (generating) onStop else ({ showInput = true }),
-                modifier = Modifier.fillMaxWidth(),
-                buttonSize = size,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (generating) {
-                        MaterialTheme.colorScheme.errorContainer
-                    } else {
-                        MaterialTheme.colorScheme.primary
-                    },
-                    contentColor = if (generating) {
-                        MaterialTheme.colorScheme.onErrorContainer
-                    } else {
-                        MaterialTheme.colorScheme.onPrimary
-                    }
-                )
-            ) {
-                Icon(
-                    imageVector = if (generating) Icons.Default.Stop else Icons.Default.Edit,
-                    contentDescription = tr(if (generating) "停止" else "输入"),
-                    modifier = Modifier.size(EdgeButtonDefaults.iconSizeFor(size))
-                )
-            }
-        }
-    ) { contentPadding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize()
-                .testTag("chat-list")
-                .nestedScroll(scrollConnection)
-                .onPreRotaryScrollEvent {
-                    if (it.verticalScrollPixels < 0) followLatest = false
-                    false
+    Box(Modifier.fillMaxSize().hierarchicalFocusGroup(active = !showInput)) {
+        ScreenScaffold(
+            modifier = Modifier.fillMaxSize(),
+            scrollState = state,
+            timeText = { TimeText() },
+            edgeButton = {
+                val size = EdgeButtonSize.ExtraSmall
+                EdgeButton(
+                    onClick = if (generating) onStop else ({ showInput = true }),
+                    modifier = Modifier.fillMaxWidth(),
+                    buttonSize = size,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (generating) {
+                            MaterialTheme.colorScheme.errorContainer
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
+                        contentColor = if (generating) {
+                            MaterialTheme.colorScheme.onErrorContainer
+                        } else {
+                            MaterialTheme.colorScheme.onPrimary
+                        }
+                    )
+                ) {
+                    Icon(
+                        imageVector = if (generating) Icons.Default.Stop else Icons.Default.Edit,
+                        contentDescription = tr(if (generating) "停止" else "输入"),
+                        modifier = Modifier.size(EdgeButtonDefaults.iconSizeFor(size))
+                    )
                 }
-                .requestFocusOnHierarchyActive()
-                .rotaryScrollable(RotaryScrollableDefaults.behavior(state), focusRequester),
-            state = state,
-            contentPadding = contentPadding,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
+            }
+        ) { contentPadding ->
+            LazyColumn(
+                modifier = Modifier.fillMaxSize()
+                    .testTag("chat-list")
+                    .nestedScroll(scrollConnection)
+                    .onPreRotaryScrollEvent {
+                        if (it.verticalScrollPixels < 0) followLatest = false
+                        false
+                    }
+                    .requestFocusOnHierarchyActive()
+                    .rotaryScrollable(rotaryBehavior, focusRequester),
+                state = state,
+                contentPadding = contentPadding
+            ) {
                 item(key = "chat-title") {
-                    ListHeader(Modifier.fillMaxWidth()) {
+                    ListHeader(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                         Text(
                             conversation.title,
                             color = MaterialTheme.colorScheme.primary,
@@ -199,29 +215,51 @@ fun ChatScreen(
                         }
                     }
                 }
-                items(messages, key = ChatMessage::id, contentType = { it.role }) { message ->
+                items(chatItems, key = { it.key }, contentType = {
+                    if (it.part == MessagePart.FULL) it.message.role else it.part
+                }) { item ->
+                    val message = item.message
                     MessageBubble(
                         message = message,
+                        part = item.part,
+                        reasoningText = item.reasoningText,
+                        reasoningExpanded = message.id in expandedReasoningIds,
+                        assistantName = assistantName,
                         showReasoning = showReasoning,
                         markdownEnabled = markdownEnabled,
                         onLongClick = { onMessageActions(message) },
-                        onReasoningExpanded = { followLatest = false },
-                        modifier = Modifier.testTag("message-${message.id}").onSizeChanged {
-                            if (message.id == messages.lastOrNull()?.id) lastMessageHeight = it.height
-                        }
+                        onReasoningToggle = {
+                            val expanding = message.id !in expandedReasoningIds
+                            if (expanding) followLatest = false
+                            expandedReasoningIds = if (expanding) expandedReasoningIds + message.id
+                                else expandedReasoningIds - message.id
+                        },
+                        modifier = Modifier.testTag("message-${item.key}")
+                            .onSizeChanged {
+                                if (message.id == messages.lastOrNull()?.id) lastMessageLayoutRevision++
+                            }
+                            .padding(bottom = if (item.part == MessagePart.FULL || item.part == MessagePart.FOOTER) 8.dp else 0.dp)
                     )
                 }
                 item(key = "chat-bottom") { Spacer(Modifier.fillMaxWidth().height(8.dp).testTag("chat-bottom")) }
+            }
         }
-        if (!followLatest) {
+        if (!followLatest && !state.isScrollInProgress) {
             FilledTonalIconButton(
                 onClick = {
                     scope.launch {
-                        state.scrollToItem(messages.size + 1)
+                        state.scrollToItem(bottomIndex)
                         followLatest = true
                     }
                 },
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp).size(48.dp)
+                modifier = Modifier.align(Alignment.BottomEnd)
+                    .padding(
+                        end = if (configuration.isScreenRound) 16.dp else 4.dp,
+                        bottom = floatingButtonBottom
+                    )
+                    .size(40.dp)
+                    .testTag("chat-jump-to-bottom"),
+                shapes = IconButtonDefaults.shapes(CircleShape)
             ) {
                 Icon(Icons.Default.KeyboardArrowDown, contentDescription = tr("回到最新消息"))
             }
@@ -297,9 +335,7 @@ private fun ChatInputDialog(
             attachmentError = microphonePermissionError
         }
     }
-    val attachmentLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenMultipleDocuments()
-    ) { uris ->
+    val attachmentLauncher = rememberWearMultiFilePicker { uris ->
         scope.launch {
             attachmentError = null
             readingAttachments = true
@@ -353,7 +389,7 @@ private fun ChatInputDialog(
                     contentPadding = contentPadding,
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(7.dp),
-                    rotaryScrollableBehavior = RotaryScrollableDefaults.behavior(listState)
+                    rotaryScrollableBehavior = rememberChatRotaryScrollableBehavior(listState)
                 ) {
                     with(WearFisheyeScope(this, transformationSpec, isRound)) {
                         item {

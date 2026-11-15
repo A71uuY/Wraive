@@ -35,7 +35,7 @@ class PromptComposer {
                 }
                 if (selectedMemories.isNotEmpty()) {
                     append("\n\n# Long-term memory\n")
-                    selectedMemories.forEach { append("- ${it.category.name.lowercase()}: ${it.content}\n") }
+                    selectedMemories.forEach { append("- ${it.effectiveCategory.name.lowercase()}: ${it.content}\n") }
                 }
             }
             if (triggeredWorldBook.isNotEmpty()) {
@@ -59,12 +59,14 @@ class PromptComposer {
                 else -> false
             }
         }
+        val transformed = applicable.fold(message.content) { content, transform ->
+            runCatching {
+                Regex(transform.pattern).replace(content, transform.replacement)
+            }.getOrElse { content }
+        }
         message.copy(
-            content = applicable.fold(message.content) { content, transform ->
-                runCatching {
-                    Regex(transform.pattern).replace(content, transform.replacement)
-                }.getOrElse { content }
-            }
+            content = transformed,
+            providerContent = message.providerContent.takeIf { transformed == message.content }
         )
     }
 

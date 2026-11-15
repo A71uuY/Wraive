@@ -46,6 +46,7 @@ import moye.wear.wraive.ui.components.WearInfoCard
 import moye.wear.wraive.ui.components.WearSectionHeader
 import moye.wear.wraive.ui.components.WearListScreen
 import moye.wear.wraive.ui.tr
+import moye.wear.wraive.ui.components.rememberWearFilePicker
 
 @Composable
 fun ProvidersScreen(
@@ -349,10 +350,8 @@ private fun ImportProviderDialog(
             .onSuccess(onImport)
             .onFailure { error = it.message }
     }
-    val image = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri ->
-        if (uri != null) runCatching {
+    val image = rememberWearFilePicker { uri ->
+        runCatching {
             val bitmap = context.contentResolver.openInputStream(uri)?.use {
                 BitmapFactory.decodeStream(it)
             } ?: error("无法读取二维码图片")
@@ -369,7 +368,7 @@ private fun ImportProviderDialog(
         }) {
             item { WearTextField(text, { text = it }, "粘贴 Wraive 分享文本", 6) }
             item { WearActionButton("相机扫码", { camera.launch(null) }, icon = Icons.Default.QrCode) }
-            item { WearActionButton("从图片读取", { image.launch("image/*") }, icon = Icons.Default.Download) }
+            item { WearActionButton("从图片读取", { image.launch(arrayOf("image/*")) }, icon = Icons.Default.Download) }
             error?.let { item { Text(it, color = MaterialTheme.colorScheme.error) } }
         }
     }

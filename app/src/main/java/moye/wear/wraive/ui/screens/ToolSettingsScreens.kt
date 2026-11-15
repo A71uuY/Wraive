@@ -86,7 +86,7 @@ private fun SearchEditor(
 ) {
     var name by remember(original?.id, visible) { mutableStateOf(original?.name.orEmpty()) }
     var type by remember(original?.id, visible) {
-        mutableStateOf(original?.type ?: SearchProviderType.DUCKDUCKGO)
+        mutableStateOf(if (original == null) SearchProviderType.DUCKDUCKGO else original.type)
     }
     var baseUrl by remember(original?.id, visible) {
         mutableStateOf(original?.baseUrl.orEmpty())
@@ -103,6 +103,7 @@ private fun SearchEditor(
         visible = visible,
         title = original?.name ?: "添加搜索服务",
         onDismiss = onDismiss,
+        saveEnabled = type != null,
         onSave = {
             runCatching {
                 val headerType = object : TypeToken<Map<String, String>>() {}.type
@@ -269,7 +270,7 @@ fun MemoriesScreen(
             item(key = entry.id) {
                 val scope = assistants.firstOrNull { it.id == entry.assistantId }?.name ?: "全局"
                 WearActionButton(
-                    entry.category.name.lowercase().replaceFirstChar(Char::uppercase),
+                    entry.effectiveCategory.name.lowercase().replaceFirstChar(Char::uppercase),
                     { editing = entry },
                     icon = Icons.Default.Memory,
                     secondary = "$scope · ${entry.content}"
@@ -298,7 +299,7 @@ private fun MemoryEditor(
 ) {
     var content by remember(original?.id, visible) { mutableStateOf(original?.content.orEmpty()) }
     var category by remember(original?.id, visible) {
-        mutableStateOf(original?.category ?: MemoryCategory.IDENTITY)
+        mutableStateOf(original?.effectiveCategory ?: MemoryCategory.IDENTITY)
     }
     var assistantId by remember(original?.id, visible) { mutableStateOf(original?.assistantId) }
     FullScreenEditor(
@@ -499,6 +500,7 @@ private fun QuickPhraseEditor(
     }
 }
 
-private fun SearchProviderType.displayName(): String = name.lowercase()
-    .replace('_', ' ')
-    .replaceFirstChar(Char::uppercase)
+private fun SearchProviderType?.displayName(): String = this?.name?.lowercase()
+    ?.replace('_', ' ')
+    ?.replaceFirstChar(Char::uppercase)
+    ?: "请重新选择搜索服务类型"
