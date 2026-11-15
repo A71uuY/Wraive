@@ -15,3 +15,10 @@
 # the field's generic element type. Keep every persisted capability enum value
 # available for the repository's compatibility conversion.
 -keep enum moye.wear.wraive.model.ModelCapability { *; }
+
+# Preserve SDK calls so the device's Wear implementation wins class loading.
+-keep class com.google.wear.input.WearHapticFeedbackConstants {
+    public static int getScrollItemFocus();
+    public static int getScrollTick();
+    public static int getScrollLimit();
+}

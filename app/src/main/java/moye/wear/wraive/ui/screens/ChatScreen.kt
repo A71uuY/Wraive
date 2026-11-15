@@ -60,6 +60,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.foundation.rotary.rotaryScrollable
+import androidx.wear.compose.foundation.rotary.RotaryScrollableDefaults
 import androidx.wear.compose.foundation.requestFocusOnHierarchyActive
 import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.EdgeButton
@@ -84,7 +85,6 @@ import moye.wear.wraive.model.TranscriptionEngine
 import moye.wear.wraive.ui.components.MessageBubble
 import moye.wear.wraive.ui.components.WearActionButton
 import moye.wear.wraive.ui.components.WearFisheyeScope
-import moye.wear.wraive.ui.components.rememberCompatibleRotaryBehavior
 import moye.wear.wraive.ui.tr
 
 @Composable
@@ -170,7 +170,7 @@ fun ChatScreen(
                     false
                 }
                 .requestFocusOnHierarchyActive()
-                .rotaryScrollable(rememberCompatibleRotaryBehavior(state), focusRequester),
+                .rotaryScrollable(RotaryScrollableDefaults.behavior(state), focusRequester),
             state = state,
             contentPadding = contentPadding,
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -353,7 +353,7 @@ private fun ChatInputDialog(
                     contentPadding = contentPadding,
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(7.dp),
-                    rotaryScrollableBehavior = rememberCompatibleRotaryBehavior(listState)
+                    rotaryScrollableBehavior = RotaryScrollableDefaults.behavior(listState)
                 ) {
                     with(WearFisheyeScope(this, transformationSpec, isRound)) {
                         item {

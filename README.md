@@ -40,12 +40,14 @@ Wraive 使用 Kotlin 与 Jetpack Compose 构建，围绕手表的圆形屏幕、
 ### 构建调试版本
 
 ```bash
-git clone https://github.com/youshen2/Wraive.git
+git clone --recurse-submodules https://github.com/youshen2/Wraive.git
 cd Wraive
 ./gradlew :app:assembleDebug
 ```
 
 使用 Android Studio 打开项目时可由 IDE 配置 SDK 路径。命令行构建可通过 `ANDROID_HOME` 指定 SDK，或在本地 `local.properties` 中填写 `sdk.dir`。
+
+已有工作副本先运行 `git submodule update --init --recursive`，以获取构建所需的 CN Wear Overlay 插件。
 
 Windows 下使用 `gradlew.bat :app:assembleDebug`。调试 APK 输出至：
 
@@ -89,6 +91,8 @@ app/src/main/res/    Android 资源与自适应图标
 设计与开发：**爅峫**。
 
 本项目参考了 [Kelivo](https://github.com/Chevey339/kelivo)，感谢其带来的启发。
+
+通过 [CN Wear Overlay](https://github.com/Star-ZER0/cnwearoverlay) 的 Gradle 插件适配小米 / OPPO 手表的表冠触觉与小米触觉常量；小米 Watch 5（M2505W1、M2501W1）使用系统返回导航。接入方式参考 [Orbit](https://github.com/PianoEthan/Orbit)。
 
 ## 许可证
 

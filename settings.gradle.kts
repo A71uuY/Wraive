@@ -1,4 +1,5 @@
 pluginManagement {
+    includeBuild("cnwearoverlay")
     repositories {
         google {
             content {
@@ -24,4 +25,3 @@ dependencyResolutionManagement {
 
 rootProject.name = "Wraive"
 include(":app")
- 

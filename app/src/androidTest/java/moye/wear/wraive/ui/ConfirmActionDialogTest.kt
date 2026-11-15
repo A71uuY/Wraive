@@ -10,24 +10,24 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.wear.compose.material3.AppScaffold
-import moye.wear.wraive.ui.components.Watch5ConfirmDialog
+import moye.wear.wraive.ui.components.ConfirmActionDialog
 import moye.wear.wraive.ui.theme.WraiveTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
-class Watch5CompatibilityUiTest {
+class ConfirmActionDialogTest {
     @get:Rule val compose = createComposeRule()
 
     @Test
-    fun watch5ConfirmationScrollsAndKeepsCancelSeparateFromConfirm() {
+    fun confirmationScrollsAndKeepsCancelSeparateFromConfirm() {
         val visible = mutableStateOf(true)
         var confirmed = 0
         var dismissed = 0
         compose.setContent {
             WraiveTheme(dynamicColor = false, localeTag = "zh") {
                 AppScaffold {
-                    Watch5ConfirmDialog(
+                    ConfirmActionDialog(
                         visible = visible.value,
                         title = "删除会话？",
                         message = "删除后，会话及其中的消息将无法恢复。\n".repeat(8),

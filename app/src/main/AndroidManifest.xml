@@ -20,6 +20,13 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Wraive">
 
+        <uses-library
+            android:name="com.google.android.wearable"
+            android:required="false" />
+        <uses-library
+            android:name="wear-sdk"
+            android:required="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true">

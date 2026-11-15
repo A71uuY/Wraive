@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -69,6 +70,14 @@ import java.io.File
 @Composable
 fun AppNavigation(graph: AppGraph) {
     val navController = rememberSwipeDismissableNavController()
+    val backStackEntry by navController.currentBackStackEntryFlow.collectAsState(
+        initial = navController.currentBackStackEntry
+    )
+    val canGoBack = remember(backStackEntry) { navController.previousBackStackEntry != null }
+    // Wear Navigation's API 36+ back handler is disabled along with swipe-to-dismiss.
+    BackHandler(enabled = canGoBack && !DeviceCompatibility.supportsSwipeToDismiss) {
+        navController.popBackStack()
+    }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val providers by graph.repository.providers.collectAsStateWithLifecycle()

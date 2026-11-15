@@ -127,8 +127,7 @@ fun WearListScreen(
             state = scrollState,
             contentPadding = contentPadding,
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-            rotaryScrollableBehavior = rememberCompatibleRotaryBehavior(scrollState)
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             with(WearFisheyeScope(this, transformationSpec, isRound)) {
                 item(key = "screen-title") {
