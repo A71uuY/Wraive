@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -77,8 +78,9 @@ fun AboutScreen() {
             AboutPanel("更新内容", Icons.Default.History) {
                 Text("v${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 2.dp))
-                ChangelogBulletItem("适配了小米Watch5")
-                ChangelogBulletItem("修改了部分UI")
+                stringArrayResource(R.array.changelog_entries).forEach { entry ->
+                    ChangelogBulletItem(entry)
+                }
             }
         }
         item(key = "footer") {

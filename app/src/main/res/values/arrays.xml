@@ -1,0 +1,13 @@
+<resources>
+    <string-array name="changelog_entries">
+        <item>增加了 DeepSeek 官方联网搜索与链接读取工具支持</item>
+        <item>修复了聊天页面表冠滚动异常的问题</item>
+        <item>修复了添加自定义搜索服务时可能崩溃的问题</item>
+        <item>修复了自动提炼记忆或读取旧记忆后对话可能会报错的问题</item>
+        <item>修复了回复生成中及生成完成后数学公式显示延迟的问题</item>
+        <item>补全了小米Watch5的表冠振动</item>
+        <item>优化了多轮工具调用流程</item>
+        <item>优化了工具调用消息的显示样式</item>
+        <item>优化了展开思考内容后的流畅度</item>
+    </string-array>
+</resources>
