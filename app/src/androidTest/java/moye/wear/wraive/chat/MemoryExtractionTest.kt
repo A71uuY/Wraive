@@ -53,7 +53,7 @@ class MemoryExtractionTest {
             val payload = JsonParser.parseString(buffer.readUtf8()).asJsonObject
             val system = payload.getAsJsonArray("messages").first().asJsonObject.get("content").asString
             val text = if (system == "Return valid JSON only.") gson.toJson(extracted) else {
-                lastConversationPrompt = system
+                lastConversationPrompt = payload.getAsJsonArray("messages").last().asJsonObject.get("content").asString
                 "正常回复"
             }
             val data = JsonObject().apply {

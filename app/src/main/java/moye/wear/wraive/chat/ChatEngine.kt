@@ -253,15 +253,19 @@ class ChatEngine(
             val systemPrompt = promptComposer.systemPrompt(
                 assistant = assistant,
                 model = model,
+                conversationSummary = compressed.summary
+            )
+            val turnContext = promptComposer.turnContext(
+                assistant = assistant,
                 memories = repository.memories.value,
                 worldBookEntries = repository.worldBookEntries.value,
-                history = compressed.history,
-                conversationSummary = compressed.summary
+                history = compressed.history
             )
             val history = promptComposer.transformHistory(
                 compressed.history,
                 repository.promptTransforms.value
             ).toMutableList()
+            val requestHistory = promptComposer.withTurnContext(history, turnContext).toMutableList()
             val tools = toolRuntime.prepare(assistant, provider, model)
             var finalPreview = ""
             while (true) {
@@ -295,7 +299,7 @@ class ChatEngine(
                         model = model,
                         assistant = assistant,
                         systemPrompt = systemPrompt,
-                        messages = history,
+                        messages = requestHistory,
                         toolDefinitions = tools.definitions
                     )
                 ).collect { event ->
@@ -312,6 +316,7 @@ class ChatEngine(
                 val assistantMessage = active(MessageStatus.COMPLETE)
                 repository.upsertMessage(assistantMessage, originalConversation.temporary)
                 completedUsage += usage
+                requestHistory += assistantMessage
                 history += assistantMessage
                 if (originalConversation.temporary) {
                     _temporaryMessages.value += originalConversation.id to history.toList()
@@ -336,6 +341,7 @@ class ChatEngine(
                         modelId = model.id
                     )
                     repository.upsertMessage(toolMessage, originalConversation.temporary)
+                    requestHistory += toolMessage
                     history += toolMessage
                     if (originalConversation.temporary) {
                         _temporaryMessages.value += originalConversation.id to history.toList()

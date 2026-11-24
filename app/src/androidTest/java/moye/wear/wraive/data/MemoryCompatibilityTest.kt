@@ -7,7 +7,6 @@ import moye.wear.wraive.chat.PromptComposer
 import moye.wear.wraive.model.AssistantProfile
 import moye.wear.wraive.model.MemoryCategory
 import moye.wear.wraive.model.MemoryEntry
-import moye.wear.wraive.model.ModelConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -34,13 +33,11 @@ class MemoryCompatibilityTest {
                 assertEquals(MemoryCategory.IDENTITY, it.category)
                 assertEquals("旧版记忆", it.content)
             }
-            val prompt = PromptComposer().systemPrompt(
+            val prompt = PromptComposer().turnContext(
                 assistant = AssistantProfile(name = "助手"),
-                model = ModelConfig(id = "model", providerId = "provider"),
                 memories = restored,
                 worldBookEntries = emptyList(),
-                history = emptyList(),
-                conversationSummary = ""
+                history = emptyList()
             )
             assertTrue(prompt.contains("identity: 旧版记忆"))
             assertTrue(prompt.contains("workflow: 正常提炼的记忆"))

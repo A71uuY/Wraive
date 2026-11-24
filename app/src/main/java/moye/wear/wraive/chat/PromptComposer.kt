@@ -14,10 +14,25 @@ class PromptComposer {
     fun systemPrompt(
         assistant: AssistantProfile,
         model: ModelConfig,
+        conversationSummary: String
+    ): String = buildString {
+        append(assistant.systemPrompt
+            .replace("{{model}}", model.displayName)
+            .replace("{{model_id}}", model.id)
+            .replace("{{assistant}}", assistant.name))
+        if (clockVariables.any { it in assistant.systemPrompt }) {
+            append("\n\nUse the current turn’s clock values for the time placeholders above.")
+        }
+        if (conversationSummary.isNotBlank()) {
+            append("\n\n# Earlier conversation summary\n$conversationSummary")
+        }
+    }.trim()
+
+    fun turnContext(
+        assistant: AssistantProfile,
         memories: List<MemoryEntry>,
         worldBookEntries: List<WorldBookEntry>,
-        history: List<ChatMessage>,
-        conversationSummary: String
+        history: List<ChatMessage>
     ): String {
         val recentText = history.takeLast(12).joinToString("\n") { it.content }.lowercase()
         val triggeredWorldBook = worldBookEntries
@@ -28,7 +43,18 @@ class PromptComposer {
             }
             .sortedByDescending(WorldBookEntry::priority)
         return buildString {
-            append(resolveVariables(assistant.systemPrompt, assistant, model))
+            val turn = history.lastOrNull { it.role == MessageRole.USER }
+            if (turn != null) {
+                val date = Date(turn.createdAt)
+                for (variable in clockVariables.filter { it in assistant.systemPrompt }) {
+                    val format = when (variable) {
+                        "{{time}}" -> DateFormat.getTimeInstance()
+                        "{{date}}" -> DateFormat.getDateInstance()
+                        else -> DateFormat.getDateTimeInstance()
+                    }
+                    appendLine("$variable = ${format.format(date)}")
+                }
+            }
             if (assistant.memoryEnabled) {
                 val selectedMemories = memories.filter {
                     it.enabled && (it.assistantId == null || it.assistantId == assistant.id)
@@ -41,9 +67,6 @@ class PromptComposer {
             if (triggeredWorldBook.isNotEmpty()) {
                 append("\n\n# Relevant world book entries\n")
                 triggeredWorldBook.forEach { append("## ${it.title}\n${it.content}\n") }
-            }
-            if (conversationSummary.isNotBlank()) {
-                append("\n\n# Earlier conversation summary\n$conversationSummary")
             }
         }.trim()
     }
@@ -70,18 +93,18 @@ class PromptComposer {
         )
     }
 
-    fun resolveVariables(
-        value: String,
-        assistant: AssistantProfile,
-        model: ModelConfig
-    ): String {
-        val now = Date()
-        return value
-            .replace("{{model}}", model.displayName)
-            .replace("{{model_id}}", model.id)
-            .replace("{{assistant}}", assistant.name)
-            .replace("{{date}}", DateFormat.getDateInstance().format(now))
-            .replace("{{time}}", DateFormat.getTimeInstance().format(now))
-            .replace("{{datetime}}", DateFormat.getDateTimeInstance().format(now))
+    fun withTurnContext(history: List<ChatMessage>, context: String): List<ChatMessage> {
+        if (context.isBlank()) return history
+        val index = history.indexOfLast { it.role == MessageRole.USER }
+        if (index < 0) return history
+        val message = history[index]
+        return history.toMutableList().apply {
+            this[index] = message.copy(
+                content = "$context\n\n# User message\n${message.content}",
+                providerContent = null
+            )
+        }
     }
+
+    private val clockVariables = listOf("{{date}}", "{{time}}", "{{datetime}}")
 }
