@@ -1,0 +1,26 @@
+name: Test and build Wear OS APK
+
+on: [push, workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install Android SDK Platform 37
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0"'
+      - run: bash gradlew :app:testDebugUnitTest :app:assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wraive-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
