@@ -19,8 +19,15 @@ jobs:
       - name: Install Android SDK Platform 37
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0"'
       - run: bash gradlew :app:testDebugUnitTest :app:assembleDebug
+      - name: Verify comparison APK
+        run: |
+          aapt=$(find "$ANDROID_HOME/build-tools" -name aapt | sort -V | tail -1)
+          "$aapt" dump badging app/build/outputs/apk/debug/app-debug.apk > "$RUNNER_TEMP/badging"
+          grep -F "package: name='moye.wear.wraive.baseline'" "$RUNNER_TEMP/badging"
+          grep -Fx "application-label:'Wraive 原版'" "$RUNNER_TEMP/badging"
+          grep -F "launchable-activity: name='moye.wear.wraive.MainActivity'" "$RUNNER_TEMP/badging"
       - uses: actions/upload-artifact@v4
         with:
-          name: wraive-debug
+          name: wraive-baseline-side-by-side
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
