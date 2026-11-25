@@ -28,3 +28,11 @@
     public static int getScrollTick();
     public static int getScrollLimit();
 }
+
+# Gson persists these fields by their Kotlin names in SQLite, preferences and backups.
+# Keep the JSON schema identical across debug, release and future updates.
+-keepattributes Signature,InnerClasses,EnclosingMethod
+-keep class moye.wear.wraive.model.** { <fields>; <init>(...); }
+-keep enum moye.wear.wraive.model.** { *; }
+-keep class moye.wear.wraive.data.RepositorySnapshot { <fields>; <init>(...); }
+-keep class moye.wear.wraive.data.CloudSecrets { <fields>; <init>(...); }
