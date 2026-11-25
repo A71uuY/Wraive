@@ -54,6 +54,7 @@ class BackupService(
         val root = input.reader(Charsets.UTF_8).use {
             JsonParser.parseReader(it).asJsonObject
         }
+        root.expandStoreBackupKeys()
         val version = root.get("formatVersion")?.asInt ?: 1
         require(version in 1..FORMAT_VERSION) {
             "不支持的备份版本 $version"
@@ -93,6 +94,35 @@ class BackupService(
 
     private companion object {
         const val FORMAT_VERSION = 2
+    }
+}
+
+// The 0.2.1 store build serialized R8 field names and omitted its constant version.
+private fun JsonObject.expandStoreBackupKeys() {
+    if (has("data")) return
+    val snapshot = get("c")?.takeIf { it.isJsonObject }?.asJsonObject ?: return
+    val prefs = get("b")?.takeIf { it.isJsonObject }?.asJsonObject ?: return
+    if (get("a")?.takeIf { it.isJsonPrimitive }?.asJsonPrimitive?.isNumber != true ||
+        listOf("a", "b", "c", "d", "e").any { snapshot.get(it)?.isJsonArray != true }
+    ) return
+    expandKeys("exportedAt", "preferences", "data")
+    prefs.expandKeys(
+        "dynamicColor", "showReasoning", "showProvider", "markdownEnabled",
+        "backgroundGeneration", "confirmRegenerate", "confirmDelete", "localeTag",
+        "hapticsEnabled", "autoTitle", "contextCompressionEnabled", "searchResultLimit",
+        "autoSpeakReplies", "customFontPath"
+    )
+    snapshot.expandKeys(
+        "providers", "models", "assistants", "conversations", "messages", "memories",
+        "worldBookEntries", "quickPhrases", "searchProviders", "mcpServers",
+        "promptTransforms", "speechConfig", "requestLogs", "cloudBackupConfig",
+        "networkProxyConfig", "transcriptionConfig"
+    )
+}
+
+private fun JsonObject.expandKeys(vararg names: String) {
+    names.forEachIndexed { index, name ->
+        remove(('a' + index).toString())?.let { if (!has(name)) add(name, it) }
     }
 }
 

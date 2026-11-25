@@ -50,12 +50,19 @@ data class SearchResult(
 enum class McpTransport { STREAMABLE_HTTP, SSE }
 
 data class McpServerConfig(
+    @SerializedName(value = "id", alternate = ["a"])
     val id: String = UUID.randomUUID().toString(),
+    @SerializedName(value = "name", alternate = ["b"])
     val name: String,
+    @SerializedName(value = "url", alternate = ["c"])
     val url: String,
+    @SerializedName(value = "transport", alternate = ["d"])
     val transport: McpTransport = McpTransport.STREAMABLE_HTTP,
+    @SerializedName(value = "headers", alternate = ["e"])
     val headers: Map<String, String> = emptyMap(),
+    @SerializedName(value = "enabled", alternate = ["f"])
     val enabled: Boolean = true,
+    @SerializedName(value = "timeoutSeconds", alternate = ["g"])
     val timeoutSeconds: Int = 30
 )
 
