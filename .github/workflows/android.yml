@@ -18,11 +18,11 @@ jobs:
           java-version: '21'
       - name: Install Android SDK Platform 37
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0"'
-      - run: bash gradlew :app:testDebugUnitTest :app:assembleDebug
+      - run: bash gradlew :app:testDebugUnitTest :app:assembleRelease
       - name: Verify comparison APK
         run: |
           aapt=$(find "$ANDROID_HOME/build-tools" -name aapt | sort -V | tail -1)
-          "$aapt" dump badging app/build/outputs/apk/debug/app-debug.apk > "$RUNNER_TEMP/badging"
+          "$aapt" dump badging app/build/outputs/apk/release/app-release-unsigned.apk > "$RUNNER_TEMP/badging"
           grep -F "package: name='moye.wear.wraive.modified'" "$RUNNER_TEMP/badging"
           grep -Fx "application-label:'Wraive 修改版'" "$RUNNER_TEMP/badging"
           grep -F "launchable-activity: name='moye.wear.wraive.MainActivity'" "$RUNNER_TEMP/badging"
@@ -39,7 +39,7 @@ jobs:
           signer=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
           "$signer" sign --ks "$store" --ks-type PKCS12 --ks-key-alias modified \
             --ks-pass env:SIGNING_PASSWORD --key-pass env:SIGNING_PASSWORD \
-            --out wraive-modified.apk app/build/outputs/apk/debug/app-debug.apk
+            --out wraive-modified.apk app/build/outputs/apk/release/app-release-unsigned.apk
           "$signer" verify --verbose --print-certs wraive-modified.apk | tee "$RUNNER_TEMP/signature"
           grep -F 'certificate SHA-256 digest: 5e6663a10abe05f9c9d220d98bcf36a653462299e385a50fa804bd3eeacf40fb' "$RUNNER_TEMP/signature"
       - uses: actions/upload-artifact@v4
