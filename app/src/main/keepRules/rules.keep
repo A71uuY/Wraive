@@ -36,3 +36,4 @@
 -keep enum moye.wear.wraive.model.** { *; }
 -keep class moye.wear.wraive.data.RepositorySnapshot { <fields>; <init>(...); }
 -keep class moye.wear.wraive.data.CloudSecrets { <fields>; <init>(...); }
+-keep class moye.wear.wraive.data.BackupService$BackupBundle { <fields>; <init>(...); }
