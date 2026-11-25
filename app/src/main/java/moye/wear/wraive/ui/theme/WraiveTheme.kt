@@ -2,6 +2,7 @@ package moye.wear.wraive.ui.theme
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
@@ -15,6 +16,8 @@ import androidx.wear.compose.material3.dynamicColorScheme
 import moye.wear.wraive.ui.LocalUiLocaleTag
 
 val LocalScreenRound = staticCompositionLocalOf { true }
+
+internal val LocalCustomTypeface = staticCompositionLocalOf<Typeface?> { null }
 
 private val fallbackScheme = ColorScheme(
     primary = Color(0xFFC8B6FF),
@@ -59,19 +62,48 @@ fun WraiveTheme(
     } else {
         fallbackScheme
     }
-    val fontFamily = androidx.compose.runtime.remember(customFontPath) {
+    val typeface = remember(customFontPath) {
         customFontPath.takeIf(String::isNotBlank)?.let { path ->
-            runCatching { FontFamily(Typeface.createFromFile(path)) }.getOrNull()
-        } ?: FontFamily.Default
+            runCatching { Typeface.createFromFile(path) }.getOrNull()
+        }
+    }
+    val typography = remember(typeface) {
+        val defaults = Typography()
+        if (typeface == null) defaults else defaults.withFontFamily(FontFamily(typeface))
     }
     CompositionLocalProvider(
+        LocalCustomTypeface provides typeface,
         LocalScreenRound provides LocalConfiguration.current.isScreenRound,
         LocalUiLocaleTag provides localeTag
     ) {
         MaterialTheme(
             colorScheme = scheme,
-            typography = Typography(defaultFontFamily = fontFamily),
+            typography = typography,
             content = content
         )
     }
 }
+
+private fun Typography.withFontFamily(family: FontFamily): Typography = copy(
+    arcLarge = arcLarge.copy(fontFamily = family),
+    arcMedium = arcMedium.copy(fontFamily = family),
+    arcSmall = arcSmall.copy(fontFamily = family),
+    displayLarge = displayLarge.copy(fontFamily = family),
+    displayMedium = displayMedium.copy(fontFamily = family),
+    displaySmall = displaySmall.copy(fontFamily = family),
+    titleLarge = titleLarge.copy(fontFamily = family),
+    titleMedium = titleMedium.copy(fontFamily = family),
+    titleSmall = titleSmall.copy(fontFamily = family),
+    labelLarge = labelLarge.copy(fontFamily = family),
+    labelMedium = labelMedium.copy(fontFamily = family),
+    labelSmall = labelSmall.copy(fontFamily = family),
+    bodyLarge = bodyLarge.copy(fontFamily = family),
+    bodyMedium = bodyMedium.copy(fontFamily = family),
+    bodySmall = bodySmall.copy(fontFamily = family),
+    bodyExtraSmall = bodyExtraSmall.copy(fontFamily = family),
+    numeralExtraLarge = numeralExtraLarge.copy(fontFamily = family),
+    numeralLarge = numeralLarge.copy(fontFamily = family),
+    numeralMedium = numeralMedium.copy(fontFamily = family),
+    numeralSmall = numeralSmall.copy(fontFamily = family),
+    numeralExtraSmall = numeralExtraSmall.copy(fontFamily = family)
+)

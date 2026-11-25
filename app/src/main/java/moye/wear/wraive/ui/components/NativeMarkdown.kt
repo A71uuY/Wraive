@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
+import moye.wear.wraive.ui.theme.LocalCustomTypeface
 import io.noties.markwon.Markwon
 import io.noties.markwon.SoftBreakAddsNewLinePlugin
 import io.noties.markwon.ext.latex.JLatexMathPlugin
@@ -55,6 +56,7 @@ internal fun MarkdownMessageText(text: String, color: Color) {
 @Composable
 private fun NativeMarkdownText(markdown: String, color: Color) {
     val context = LocalContext.current
+    val customTypeface = LocalCustomTypeface.current
     val density = LocalDensity.current
     val textSize = MaterialTheme.typography.bodyMedium.fontSize
     val textSizePx = with(density) { textSize.toPx() }
@@ -75,6 +77,7 @@ private fun NativeMarkdownText(markdown: String, color: Color) {
             }
         },
         update = { textView ->
+            textView.typeface = customTypeface
             textView.setTextColor(textColor)
             textView.setLinkTextColor(textColor)
             setStreamingMarkdown(markwon, textView, normalized)
