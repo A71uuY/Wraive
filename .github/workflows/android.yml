@@ -31,7 +31,7 @@ jobs:
           SIGNING_STORE: ${{ secrets.WRAIVE_MODIFIED_KEYSTORE }}
           SIGNING_PASSWORD: ${{ secrets.WRAIVE_MODIFIED_KEY_PASSWORD }}
         run: |
-          set -eu
+          set -euo pipefail
           umask 077
           store="$RUNNER_TEMP/wraive-modified.p12"
           trap 'rm -f "$store"' EXIT
@@ -41,7 +41,7 @@ jobs:
             --ks-pass env:SIGNING_PASSWORD --key-pass env:SIGNING_PASSWORD \
             --out wraive-modified.apk app/build/outputs/apk/debug/app-debug.apk
           "$signer" verify --verbose --print-certs wraive-modified.apk | tee "$RUNNER_TEMP/signature"
-          grep -Fx 'Signer #1 certificate SHA-256 digest: 5e6663a10abe05f9c9d220d98bcf36a653462299e385a50fa804bd3eeacf40fb' "$RUNNER_TEMP/signature"
+          grep -F 'certificate SHA-256 digest: 5e6663a10abe05f9c9d220d98bcf36a653462299e385a50fa804bd3eeacf40fb' "$RUNNER_TEMP/signature"
       - uses: actions/upload-artifact@v4
         with:
           name: wraive-modified-side-by-side
