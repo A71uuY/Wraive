@@ -1,6 +1,8 @@
 package moye.wear.wraive.ui.screens
 
 import android.Manifest
+import android.graphics.Typeface
+import android.widget.Toast
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -46,11 +48,20 @@ fun AppearanceScreen(
     }
     val fontPicker = rememberWearFilePicker { uri ->
         runCatching {
-            val file = File(context.filesDir, "custom-font.ttf")
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                file.outputStream().use(input::copyTo)
-            } ?: error("无法读取字体文件")
-            onUpdate { it.copy(customFontPath = file.absolutePath) }
+            val file = File.createTempFile("custom-font-", ".ttf", context.filesDir)
+            try {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    file.outputStream().use(input::copyTo)
+                } ?: error("无法读取字体文件")
+                Typeface.createFromFile(file)
+                onUpdate { it.copy(customFontPath = file.absolutePath) }
+            } catch (e: Exception) {
+                file.delete()
+                throw e
+            }
+            removeImportedFont(context.filesDir, preferences.customFontPath)
+        }.onFailure {
+            Toast.makeText(context, "无法导入字体", Toast.LENGTH_SHORT).show()
         }
     }
     WearListScreen("外观与行为") {
@@ -84,7 +95,7 @@ fun AppearanceScreen(
                 WearActionButton(
                     "恢复系统字体",
                     {
-                        File(preferences.customFontPath).delete()
+                        removeImportedFont(context.filesDir, preferences.customFontPath)
                         onUpdate { it.copy(customFontPath = "") }
                     },
                     icon = Icons.Default.Delete
@@ -254,5 +265,13 @@ fun BackupScreen(
             )
         }
         status?.let { item { Text(tr(it), color = MaterialTheme.colorScheme.primary) } }
+    }
+}
+
+private fun removeImportedFont(filesDir: File, path: String) {
+    val file = File(path)
+    if (file.parentFile == filesDir && (file.name == "custom-font.ttf" ||
+            (file.name.startsWith("custom-font-") && file.extension == "ttf"))) {
+        file.delete()
     }
 }
